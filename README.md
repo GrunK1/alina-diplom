@@ -34,11 +34,11 @@ SERVICE_SUBSYSTEM
 # Запуск
 
 ## Запуск, перезапуск
-Из корня проекта, где лежит файл docker-compose.yaml
+Из корня проекта, где лежит файл docker-compose.yaml:
 ```bash
 docker compose up --build -d
 ```
-После этого смотрим логи
+После этого смотрим логи:
 ```bash
 docker compose logs 
 ```
@@ -54,13 +54,14 @@ docker compose logs
 ```
 
 ## Остановка, удаление
-Из корня проекта, где лежит файл docker-compose.yaml
+Из корня проекта, где лежит файл docker-compose.yaml:
 ```bash
 docker compose stop <service_name / ничего>
 ```
 Это останавливает работу конкретного сервиса, либо всей подсистемы.
 
-Остановка и удаление контейнеров подсистемы. 
+---
+Остановка и удаление контейнеров подсистемы:
 ```bash
 docker compose down
 ```
