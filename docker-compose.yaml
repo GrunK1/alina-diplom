@@ -1,6 +1,8 @@
+name: "service-subsystem"
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: service-postgres
     environment:
       POSTGRES_DB: alina_diplom
       POSTGRES_USER: postgres
@@ -14,6 +16,7 @@ services:
 
   backend:
     build: ./spring_backend
+    container_name: service-backend
     ports:
       - "8080:8080"
     depends_on:
@@ -23,6 +26,7 @@ services:
 
   frontend:
     build: ./react_frontend
+    container_name: service-frontend
     ports:
       - "3000:3000"
     depends_on:
@@ -32,6 +36,7 @@ services:
 
 volumes:
   postgres_data:
+
 
 networks:
   app-network:
