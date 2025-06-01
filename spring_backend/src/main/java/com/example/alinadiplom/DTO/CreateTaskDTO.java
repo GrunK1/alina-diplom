@@ -10,7 +10,6 @@ public class CreateTaskDTO {
     private String comment;
     private Long mlNumber;
     private Long pdId;
-    private String priorityId;
     private Integer wtId;
     private Integer assigneeId;
     private String puSerialNumber; 
