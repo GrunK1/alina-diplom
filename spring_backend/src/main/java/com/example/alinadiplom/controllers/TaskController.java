@@ -1,6 +1,7 @@
 package com.example.alinadiplom.controllers;
 
 import com.example.alinadiplom.DTO.CreateTaskDTO;
+import com.example.alinadiplom.DTO.TaskShowDTO;
 import com.example.alinadiplom.DTO.XMLTaskSendDTO;
 import com.example.alinadiplom.model.Task;
 import com.example.alinadiplom.services.TaskService;
@@ -9,13 +10,11 @@ import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Marshaller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -42,7 +41,7 @@ public class TaskController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Task>> getAll() {
+    public ResponseEntity<List<TaskShowDTO>> getAll() {
         return ResponseEntity.ok(service.getAll());
     }
 
