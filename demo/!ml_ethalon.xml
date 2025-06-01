@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routeList>
+    <mlNumber>123</mlNumber>
+    <plannedStartDate>2025-05-26T00:00:00Z</plannedStartDate>
+    <plannedEndDate>2025-05-30T00:00:00Z</plannedEndDate>
+    <pollDate>2025-05-30T00:00:00Z</pollDate>
+    <PUs>
+        <pu>
+            <puSerialNumber>123</puSerialNumber>
+            <pollFact>1</pollFact>
+            <indications>Good</indications>
+        </pu>
+        <pu>
+            <puSerialNumber>234</puSerialNumber>
+            <pollFact>0</pollFact>
+            <indications>Bad</indications>
+        </pu>
+        <pu>
+            <puSerialNumber>345</puSerialNumber>
+            <pollFact>0</pollFact>
+            <indications>Good, but small errors</indications>
+        </pu>
+    </PUs>
+    <responsibleOrganization>РосТокены</responsibleOrganization>
+</routeList>
