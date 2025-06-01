@@ -15,7 +15,7 @@ public class TaskStatusService {
     private TaskStatusRepository repository;
 
     public TaskStatus create(TaskStatus taskStatus) {
-        taskStatus.setStatusId(null);
+        taskStatus.setId(null);
         return repository.save(taskStatus);
     }
 
