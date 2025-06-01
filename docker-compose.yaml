@@ -11,6 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+    cpus: 0.6
 
   backend:
     build: ./spring_backend
@@ -20,6 +21,7 @@ services:
       - postgres
     networks:
       - app-network
+    cpus: 0.6
 
   frontend:
     build: ./react_frontend
@@ -29,6 +31,7 @@ services:
       - backend
     networks:
       - app-network
+    cpus: 0.6
 
 volumes:
   postgres_data:

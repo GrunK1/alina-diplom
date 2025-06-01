@@ -6,3 +6,6 @@
 body {
   font-family: "Inter", sans-serif;
 }
+.leaflet-control-attribution {
+  display: none !important;
+}

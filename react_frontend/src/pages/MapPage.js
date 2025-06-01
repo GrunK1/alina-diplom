@@ -1,149 +1,232 @@
-// pages/MapPage.js
+// src/pages/MapPage.js
+
 import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import axios from "axios";
-
-const createColoredIcon = (color) =>
-  new L.Icon({
-    iconUrl: require(`leaflet/dist/images/marker-icon.png`),
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowUrl: require("leaflet/dist/images/marker-shadow.png"),
-    shadowSize: [41, 41],
-    className: `leaflet-marker-icon-${color}`,
-  });
+import NavigationBarSection from "../components/NavigationBarSection";
 
 const MapPage = () => {
   const [devices, setDevices] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [filters, setFilters] = useState({
     critical: true,
+    high: true,
+    medium_plus: true,
     medium: true,
     low: true,
+    hasMl: false,
   });
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [permissionDocs, setPermissionDocs] = useState([]);
+  const [workTypes, setWorkTypes] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [formData, setFormData] = useState({
+    pdId: "",
+    wtId: "",
+    assigneeId: "",
+  });
+  const [message, setMessage] = useState("");
 
   const BASE_URL = "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await axios.get(`${BASE_URL}/record-devices`);
-      const rawDevices = res.data;
+      try {
+        const [devRes, taskRes, pdRes, wtRes, empRes, mlRes] =
+          await Promise.all([
+            axios.get(`${BASE_URL}/record-devices`),
+            axios.get(`${BASE_URL}/tasks`),
+            axios.get(`${BASE_URL}/permission-documents`),
+            axios.get(`${BASE_URL}/work-types`),
+            axios.get(`${BASE_URL}/employees/inspectors`),
+            axios.get(`${BASE_URL}/route-lists/enriched`),
+          ]);
 
-      const enrichedDevices = await Promise.all(
-        rawDevices.map(async (device) => {
-          try {
-            const pollRes = await axios.get(
-              `${BASE_URL}/poll-registries/latest`,
-              {
-                params: { serial: device.puSerialNumber },
-              }
-            );
-            const pollDate = pollRes.data.pollDate;
-            const priority = getPriorityByPollDate(pollDate);
-            return { ...device, pollDate, priority };
-          } catch (e) {
-            return { ...device, pollDate: null, priority: "Низкий" };
-          }
-        })
-      );
+        setTasks(taskRes.data);
+        setPermissionDocs(pdRes.data);
+        setWorkTypes(wtRes.data);
+        setEmployees(empRes.data);
 
-      setDevices(enrichedDevices);
+        const mlPuMap = {};
+        mlRes.data.forEach((ml) => {
+          ml.puPolls.forEach((poll) => {
+            mlPuMap[poll.puSerialNumber] = ml.mlNumber;
+          });
+        });
+
+        const enriched = await Promise.all(
+          devRes.data.map(async (device) => {
+            try {
+              const pollRes = await axios.get(
+                `${BASE_URL}/poll-registries/latest`,
+                { params: { serial: device.puSerialNumber } }
+              );
+              const pollDate = pollRes.data.pollDate;
+              const priority = getPriorityByPollDate(pollDate);
+              return {
+                ...device,
+                pollDate,
+                priority,
+                mlNumber: mlPuMap[device.puSerialNumber] || null,
+              };
+            } catch {
+              return {
+                ...device,
+                pollDate: null,
+                priority: "Нет приоритета",
+                mlNumber: mlPuMap[device.puSerialNumber] || null,
+              };
+            }
+          })
+        );
+
+        setDevices(enriched);
+      } catch (error) {
+        console.error("Ошибка загрузки данных:", error);
+      }
     };
 
     fetchData();
   }, []);
 
-  const getPriorityByPollDate = (pollDateStr) => {
-    if (!pollDateStr) return "Низкий";
+  const getPriorityByPollDate = (dateStr) => {
+    if (!dateStr) return "Нет приоритета";
     const now = new Date();
-    const pollDate = new Date(pollDateStr);
-    const diffDays = Math.floor((now - pollDate) / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 6) return "Низкий";
-    if (diffDays <= 28) return "Средний";
-    return "Критический";
+    const d = new Date(dateStr);
+    const diff = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+    if (diff >= 46) return "Критический";
+    if (diff >= 29) return "Высокий";
+    if (diff >= 15) return "Средний+";
+    if (diff >= 7) return "Средний";
+    if (diff >= 1) return "Низкий";
+    return "Нет приоритета";
   };
 
-  const parseCoordinates = (coordStr) => {
-    const [lat, lng] = coordStr.split(",").map(Number);
-    return [lat, lng];
+  const getMarkerIcon = (priority) => {
+    const colorMap = {
+      Критический: "black",
+      Высокий: "violet",
+      "Средний+": "red",
+      Средний: "orange",
+      Низкий: "yellow",
+      "Нет приоритета": "gray",
+    };
+
+    const color = colorMap[priority] || "gray";
+
+    return new L.Icon({
+      iconUrl: require(`../assets/icons/marker-${color}.png`),
+      shadowUrl: require("leaflet/dist/images/marker-shadow.png"),
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
+    });
   };
 
   const toggleFilter = (key) => {
-    setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
+    setFilters({ ...filters, [key]: !filters[key] });
   };
 
-  const filteredDevices = devices.filter((device) => {
-    if (device.priority === "Критический" && filters.critical) return true;
-    if (device.priority === "Средний" && filters.medium) return true;
-    if (device.priority === "Низкий" && filters.low) return true;
-    return false;
+  const filteredDevices = devices.filter((d) => {
+    const priorityMap = {
+      Критический: "critical",
+      Высокий: "high",
+      "Средний+": "medium_plus",
+      Средний: "medium",
+      Низкий: "low",
+    };
+
+    const priorityKey = priorityMap[d.priority];
+    const matchesPriority = priorityKey ? filters[priorityKey] : true;
+    const matchesML = !filters.hasMl || d.mlNumber !== null;
+
+    return matchesPriority && matchesML;
   });
 
-  const getMarkerIcon = (priority) => {
-    if (priority === "Критический") return createColoredIcon("red");
-    if (priority === "Средний") return createColoredIcon("yellow");
-    return createColoredIcon("green");
+  const handleSubmit = async () => {
+    const alreadyExists = tasks.some(
+      (t) => t.puSerialNumber === selectedDevice.puSerialNumber
+    );
+    if (alreadyExists) {
+      setMessage("Задание уже создано");
+      return;
+    }
+
+    try {
+      await axios.post(`${BASE_URL}/tasks`, {
+        address: selectedDevice.puAddress,
+        comment: "",
+        mlNumber: selectedDevice.mlNumber || 1,
+        pdId: Number(formData.pdId),
+        wtId: Number(formData.wtId),
+        assigneeId: Number(formData.assigneeId),
+        priorityId: priorityToEnum(selectedDevice.priority),
+        puSerialNumber: selectedDevice.puSerialNumber,
+      });
+      setMessage("Задание успешно создано");
+    } catch (e) {
+      setMessage("Ошибка при создании задания");
+    }
   };
 
+  const priorityToEnum = (priority) => {
+    return {
+      Низкий: "LOW",
+      Средний: "MEDIUM",
+      "Средний+": "MEDIUM_PLUS",
+      Высокий: "HIGH",
+      Критический: "CRITICAL",
+    }[priority];
+  };
+
+  const parseCoordinates = (str) =>
+    str?.includes(",") ? str.split(",").map(Number) : [0, 0];
+
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
-      {/* Левая часть */}
-      <div style={{ flex: 1, position: "relative" }}>
-        <div
-          style={{
-            position: "absolute",
-            top: 16,
-            left: 16,
-            zIndex: 1000,
-            background: "white",
-            padding: 16,
-            borderRadius: 8,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-          }}
-        >
-          <h3 style={{ fontWeight: "bold", marginBottom: 8 }}>Фильтры</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label>
+    <div className="relative h-screen w-screen overflow-hidden">
+      <NavigationBarSection />
+
+      <div className="pt-[80px] relative h-full w-full">
+        <div className="absolute z-[999] top-0 left-4 bg-white p-4 rounded shadow-md w-64">
+          <h3 className="font-bold mb-2">Фильтры</h3>
+          {[
+            ["Критический", "critical"],
+            ["Высокий", "high"],
+            ["Средний+", "medium_plus"],
+            ["Средний", "medium"],
+            ["Низкий", "low"],
+          ].map(([label, key]) => (
+            <label key={key} className="block text-sm">
               <input
                 type="checkbox"
-                checked={filters.critical}
-                onChange={() => toggleFilter("critical")}
+                checked={filters[key]}
+                onChange={() => toggleFilter(key)}
               />{" "}
-              Критический
+              {label}
             </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={filters.medium}
-                onChange={() => toggleFilter("medium")}
-              />{" "}
-              Средний
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={filters.low}
-                onChange={() => toggleFilter("low")}
-              />{" "}
-              Низкий
-            </label>
-          </div>
+          ))}
+          <label className="block mt-2 text-sm">
+            <input
+              type="checkbox"
+              checked={filters.hasMl}
+              onChange={() => toggleFilter("hasMl")}
+            />{" "}
+            Только с маршрутным листом
+          </label>
         </div>
 
         <MapContainer
           center={[55.76, 37.64]}
-          zoom={10}
-          style={{ height: "100vh", width: "100%" }}
+          zoom={11}
+          className="h-full w-full z-0"
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
+            attribution=""
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-
           {filteredDevices.map((device) => {
             const [lat, lng] = parseCoordinates(device.puCoordinates);
             return (
@@ -151,64 +234,105 @@ const MapPage = () => {
                 key={device.puSerialNumber}
                 position={[lat, lng]}
                 icon={getMarkerIcon(device.priority)}
-                eventHandlers={{
-                  click: () => setSelectedDevice(device),
-                }}
+                eventHandlers={{ click: () => setSelectedDevice(device) }}
               />
             );
           })}
         </MapContainer>
-      </div>
 
-      {/* Правая панель */}
-      {selectedDevice && (
-        <div
-          style={{
-            width: 400,
-            height: "100vh",
-            background: "white",
-            padding: 16,
-            overflowY: "auto",
-            boxShadow: "-2px 0 6px rgba(0,0,0,0.15)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
-          >
-            <h2 style={{ fontSize: 20, fontWeight: "bold" }}>
-              Информация о приборе
+        {selectedDevice && (
+          <div className="absolute top-0 right-0 w-[400px] h-full bg-white shadow-lg p-6 overflow-y-auto z-[1000]">
+            <h2 className="text-lg font-bold mb-2">
+              Создание задания для {selectedDevice.puSerialNumber}
             </h2>
-            <button
-              onClick={() => setSelectedDevice(null)}
-              style={{ fontSize: 18, color: "gray" }}
-            >
-              ×
-            </button>
+            <p className="text-sm mb-1">Адрес: {selectedDevice.puAddress}</p>
+            <p className="text-sm mb-1">
+              Координаты: {selectedDevice.puCoordinates}
+            </p>
+            <p className="text-sm mb-1">
+              Приоритет:{" "}
+              <span className="font-medium">{selectedDevice.priority}</span>
+            </p>
+            <p className="text-sm mb-1">
+              Маршрутный лист: {selectedDevice.mlNumber ?? "—"}
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs block mb-1">Вид работ</label>
+                <select
+                  className="border w-full px-2 py-1 rounded text-sm"
+                  value={formData.wtId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, wtId: e.target.value })
+                  }
+                >
+                  <option value="">Выберите</option>
+                  {workTypes.map((wt) => (
+                    <option key={wt.wtId} value={wt.wtId}>
+                      {wt.wtType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs block mb-1">
+                  Разрешающий документ
+                </label>
+                <select
+                  className="border w-full px-2 py-1 rounded text-sm"
+                  value={formData.pdId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, pdId: e.target.value })
+                  }
+                >
+                  <option value="">Выберите</option>
+                  {permissionDocs.map((pd) => (
+                    <option key={pd.pdId} value={pd.pdId}>
+                      {pd.pdType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs block mb-1">Ответственный</label>
+                <select
+                  className="border w-full px-2 py-1 rounded text-sm"
+                  value={formData.assigneeId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, assigneeId: e.target.value })
+                  }
+                >
+                  <option value="">Выберите</option>
+                  {employees.map((e) => (
+                    <option key={e.empId} value={e.empId}>
+                      {`${e.second_name ?? ""} ${e.name ?? ""} ${
+                        e.middle_name ?? ""
+                      }`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-between mt-4">
+                <button
+                  onClick={handleSubmit}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                  + Создать задание
+                </button>
+                <button
+                  onClick={() => setSelectedDevice(null)}
+                  className="px-4 py-2 border rounded"
+                >
+                  Отмена
+                </button>
+              </div>
+              {message && (
+                <p className="text-sm text-green-600 mt-2">{message}</p>
+              )}
+            </div>
           </div>
-          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-            <p>
-              <strong>Серийный №:</strong> {selectedDevice.puSerialNumber}
-            </p>
-            <p>
-              <strong>Адрес:</strong> {selectedDevice.puAddress}
-            </p>
-            <p>
-              <strong>Координаты:</strong> {selectedDevice.puCoordinates}
-            </p>
-            <p>
-              <strong>Последний опрос:</strong> {selectedDevice.pollDate || "—"}
-            </p>
-            <p>
-              <strong>Приоритет:</strong> {selectedDevice.priority}
-            </p>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

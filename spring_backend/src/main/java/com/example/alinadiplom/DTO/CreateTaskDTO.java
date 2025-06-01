@@ -12,5 +12,6 @@ public class CreateTaskDTO {
     private Long pdId;
     private String priorityId;
     private Integer wtId;
-    private Integer assigneeId;  // Добавленное поле
+    private Integer assigneeId;
+    private String puSerialNumber; 
 }

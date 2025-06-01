@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { fetchTasks } from "../services/tasksApi";
+import axios from "axios";
 import NavigationBarSection from "../components/NavigationBarSection";
 import PriorityIndicatorSection from "../components/PriorityIndicatorSection";
 import DashboardViewSection from "../components/DashboardViewSection";
+
+const priorityLabelMap = {
+  LOW: "Низкий",
+  MEDIUM: "Средний",
+  MEDIUM_PLUS: "Средний+",
+  HIGH: "Высокий",
+  CRITICAL: "Критический",
+};
 
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
@@ -16,13 +24,47 @@ const TasksPage = () => {
     startDateTo: "",
     endDateFrom: "",
     endDateTo: "",
+    createdFrom: "",
+    createdTo: "",
   });
 
   useEffect(() => {
-    fetchTasks().then((data) => {
-      setTasks(data);
-      setFilteredTasks(data);
-    });
+    const fetchAll = async () => {
+      try {
+        const [tasksRes, routeListsRes] = await Promise.all([
+          axios.get("http://localhost:8080/api/tasks"),
+          axios.get("http://localhost:8080/api/route-lists/enriched"),
+        ]);
+
+        const routeLists = routeListsRes.data;
+
+        const enrichedTasks = tasksRes.data.map((task) => {
+          const routeList = routeLists.find((rl) =>
+            rl.puPolls?.some((pu) => pu.puSerialNumber === task.puSerialNumber)
+          );
+
+          const pu =
+            routeList?.puPolls?.find(
+              (pu) => pu.puSerialNumber === task.puSerialNumber
+            ) || {};
+
+          return {
+            ...task,
+            startDate: routeList?.plannedStartDate || null,
+            endDate: routeList?.plannedEndDate || null,
+            priority: pu.priority || task.priorityId,
+            status: task.status || "Запланировано",
+          };
+        });
+
+        setTasks(enrichedTasks);
+        setFilteredTasks(enrichedTasks);
+      } catch (err) {
+        console.error("Ошибка загрузки задач:", err);
+      }
+    };
+
+    fetchAll();
   }, []);
 
   const handleFilter = () => {
@@ -33,43 +75,31 @@ const TasksPage = () => {
           }`.toLowerCase()
         : "";
 
-      const matchId =
-        filters.id === "" || task.id.toString().includes(filters.id);
-      const matchAssignee =
-        filters.assignee === "" ||
-        assigneeFullName.includes(filters.assignee.toLowerCase());
-      const matchPriority =
-        filters.priority === "" ||
-        (task.priority &&
-          task.priority.toLowerCase() === filters.priority.toLowerCase());
-      const matchStatus =
-        filters.status === "" ||
-        (task.status &&
-          task.status.toLowerCase() === filters.status.toLowerCase());
-      const matchStartDateFrom =
-        !filters.startDateFrom ||
-        new Date(task.startDate) >= new Date(filters.startDateFrom);
-      const matchStartDateTo =
-        !filters.startDateTo ||
-        new Date(task.startDate) <= new Date(filters.startDateTo);
-      const matchEndDateFrom =
-        !filters.endDateFrom ||
-        new Date(task.endDate) >= new Date(filters.endDateFrom);
-      const matchEndDateTo =
-        !filters.endDateTo ||
-        new Date(task.endDate) <= new Date(filters.endDateTo);
-
       return (
-        matchId &&
-        matchAssignee &&
-        matchPriority &&
-        matchStatus &&
-        matchStartDateFrom &&
-        matchStartDateTo &&
-        matchEndDateFrom &&
-        matchEndDateTo
+        (filters.id === "" ||
+          task.taskNumber?.toString().includes(filters.id)) &&
+        (filters.assignee === "" ||
+          assigneeFullName.includes(filters.assignee.toLowerCase())) &&
+        (filters.priority === "" ||
+          priorityLabelMap[task.priorityId]?.toLowerCase() ===
+            filters.priority.toLowerCase()) &&
+        (filters.status === "" ||
+          task.status?.toLowerCase() === filters.status.toLowerCase()) &&
+        (!filters.startDateFrom ||
+          new Date(task.startDate) >= new Date(filters.startDateFrom)) &&
+        (!filters.startDateTo ||
+          new Date(task.startDate) <= new Date(filters.startDateTo)) &&
+        (!filters.endDateFrom ||
+          new Date(task.endDate) >= new Date(filters.endDateFrom)) &&
+        (!filters.endDateTo ||
+          new Date(task.endDate) <= new Date(filters.endDateTo)) &&
+        (!filters.createdFrom ||
+          new Date(task.dateOfCreation) >= new Date(filters.createdFrom)) &&
+        (!filters.createdTo ||
+          new Date(task.dateOfCreation) <= new Date(filters.createdTo))
       );
     });
+
     setFilteredTasks(filtered);
   };
 
@@ -83,6 +113,8 @@ const TasksPage = () => {
       startDateTo: "",
       endDateFrom: "",
       endDateTo: "",
+      createdFrom: "",
+      createdTo: "",
     });
     setFilteredTasks(tasks);
   };
@@ -93,86 +125,131 @@ const TasksPage = () => {
     completed: tasks.filter((t) => t.status === "Завершено").length,
   };
 
+  const formatDate = (dateStr) =>
+    dateStr ? new Date(dateStr).toLocaleDateString("ru-RU") : "-";
+
   return (
     <>
       <NavigationBarSection />
 
       <div className="p-6">
         <h1 className="text-4xl font-bold mb-6">Задания</h1>
-
         <DashboardViewSection stats={stats} />
 
         {/* Фильтры */}
         <div className="p-4 bg-gray-100 rounded-lg mb-4">
           <h2 className="text-xl font-semibold mb-2">Фильтры</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <input
-              type="text"
-              placeholder="Номер задания"
-              className="border p-2 rounded"
-              value={filters.id}
-              onChange={(e) => setFilters({ ...filters, id: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Исполнитель"
-              className="border p-2 rounded"
-              value={filters.assignee}
-              onChange={(e) =>
-                setFilters({ ...filters, assignee: e.target.value })
-              }
-            />
-            <input
-              type="text"
-              placeholder="Приоритет"
-              className="border p-2 rounded"
-              value={filters.priority}
-              onChange={(e) =>
-                setFilters({ ...filters, priority: e.target.value })
-              }
-            />
-            <input
-              type="text"
-              placeholder="Статус"
-              className="border p-2 rounded"
-              value={filters.status}
-              onChange={(e) =>
-                setFilters({ ...filters, status: e.target.value })
-              }
-            />
-            <input
-              type="date"
-              className="border p-2 rounded"
-              value={filters.startDateFrom}
-              onChange={(e) =>
-                setFilters({ ...filters, startDateFrom: e.target.value })
-              }
-            />
-            <input
-              type="date"
-              className="border p-2 rounded"
-              value={filters.startDateTo}
-              onChange={(e) =>
-                setFilters({ ...filters, startDateTo: e.target.value })
-              }
-            />
-            <input
-              type="date"
-              className="border p-2 rounded"
-              value={filters.endDateFrom}
-              onChange={(e) =>
-                setFilters({ ...filters, endDateFrom: e.target.value })
-              }
-            />
-            <input
-              type="date"
-              className="border p-2 rounded"
-              value={filters.endDateTo}
-              onChange={(e) =>
-                setFilters({ ...filters, endDateTo: e.target.value })
-              }
-            />
+            <div>
+              <label className="text-sm block mb-1">Номер задания</label>
+              <input
+                type="text"
+                className="border p-2 rounded w-full"
+                value={filters.id}
+                onChange={(e) => setFilters({ ...filters, id: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Исполнитель</label>
+              <input
+                type="text"
+                className="border p-2 rounded w-full"
+                value={filters.assignee}
+                onChange={(e) =>
+                  setFilters({ ...filters, assignee: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Приоритет</label>
+              <input
+                type="text"
+                className="border p-2 rounded w-full"
+                value={filters.priority}
+                onChange={(e) =>
+                  setFilters({ ...filters, priority: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Статус</label>
+              <input
+                type="text"
+                className="border p-2 rounded w-full"
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters({ ...filters, status: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Дата начала (с)</label>
+              <input
+                type="date"
+                className="border p-2 rounded w-full"
+                value={filters.startDateFrom}
+                onChange={(e) =>
+                  setFilters({ ...filters, startDateFrom: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Дата начала (до)</label>
+              <input
+                type="date"
+                className="border p-2 rounded w-full"
+                value={filters.startDateTo}
+                onChange={(e) =>
+                  setFilters({ ...filters, startDateTo: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Дата окончания (с)</label>
+              <input
+                type="date"
+                className="border p-2 rounded w-full"
+                value={filters.endDateFrom}
+                onChange={(e) =>
+                  setFilters({ ...filters, endDateFrom: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Дата окончания (до)</label>
+              <input
+                type="date"
+                className="border p-2 rounded w-full"
+                value={filters.endDateTo}
+                onChange={(e) =>
+                  setFilters({ ...filters, endDateTo: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Дата создания (с)</label>
+              <input
+                type="date"
+                className="border p-2 rounded w-full"
+                value={filters.createdFrom}
+                onChange={(e) =>
+                  setFilters({ ...filters, createdFrom: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm block mb-1">Дата создания (до)</label>
+              <input
+                type="date"
+                className="border p-2 rounded w-full"
+                value={filters.createdTo}
+                onChange={(e) =>
+                  setFilters({ ...filters, createdTo: e.target.value })
+                }
+              />
+            </div>
           </div>
+
           <div className="mt-4 flex gap-4">
             <button
               onClick={handleFilter}
@@ -188,12 +265,12 @@ const TasksPage = () => {
 
         {/* Заголовки таблицы */}
         <div className="grid grid-cols-7 gap-4 px-4 py-2 bg-blue-50 text-blue-900 font-semibold text-sm rounded-t">
-          <div>Номер</div>
+          <div>Номер задания</div>
+          <div>ПУ</div>
           <div>Приоритет</div>
-          <div>Назначил</div>
           <div>Исполнитель</div>
-          <div>Начало</div>
-          <div>Окончание</div>
+          <div>Дата начала</div>
+          <div>Дата окончания</div>
           <div>Статус</div>
         </div>
 
@@ -201,19 +278,15 @@ const TasksPage = () => {
         <div className="bg-white shadow rounded-b divide-y">
           {filteredTasks.map((task) => (
             <div
-              key={task.id}
+              key={task.taskNumber ?? task.id}
               className="grid grid-cols-7 gap-4 px-4 py-2 text-sm text-gray-800 items-center hover:bg-gray-50"
             >
-              <div>{task.id}</div>
+              <div>{task.taskNumber ?? task.id}</div>
+              <div>{task.puSerialNumber || "-"}</div>
               <div>
-                <PriorityIndicatorSection priority={task.priority} />
-              </div>
-              <div>
-                {task.assignor
-                  ? `${task.assignor.second_name ?? ""} ${
-                      task.assignor.name ?? ""
-                    } ${task.assignor.middle_name ?? ""}`
-                  : "-"}
+                <PriorityIndicatorSection
+                  priority={priorityLabelMap[task.priority] || task.priority}
+                />
               </div>
               <div>
                 {task.assignee
@@ -222,9 +295,9 @@ const TasksPage = () => {
                     } ${task.assignee.middle_name ?? ""}`
                   : "-"}
               </div>
-              <div>{task.startDate}</div>
-              <div>{task.endDate}</div>
-              <div>{task.status}</div>
+              <div>{formatDate(task.startDate)}</div>
+              <div>{formatDate(task.endDate)}</div>
+              <div>{task.status || "Запланировано"}</div>
             </div>
           ))}
         </div>

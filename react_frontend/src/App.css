@@ -1,6 +1,9 @@
 .App {
   text-align: center;
 }
+.leaflet-control-attribution {
+  display: none !important;
+}
 
 .App-logo {
   height: 40vmin;

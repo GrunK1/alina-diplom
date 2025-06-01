@@ -1,8 +1,9 @@
+// src/components/SummarySection.js
 import React from "react";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import { FaClipboardList } from "react-icons/fa";
 
-const SummarySection = ({ processed = 18, total = 20 }) => {
+const SummarySection = ({ processed = 0, total = 0 }) => {
   const percentage = total ? (processed / total) * 100 : 0;
 
   return (

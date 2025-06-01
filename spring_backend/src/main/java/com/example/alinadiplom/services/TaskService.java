@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import java.sql.Time;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 public class TaskService {
@@ -38,60 +37,79 @@ public class TaskService {
     @Autowired
     private EmployeeService employeeService;
 
+    @Autowired
+    private RecordDeviceService recordDeviceService;
+
+    @Autowired
+    private PollRegistryService pollRegistryService;
+
+    @Autowired
+    private PollRegistryToRouteListService pollRegistryToRouteListService;
+
     @Transactional
     public XMLTaskSendDTO create(CreateTaskDTO task) {
         Task t = new Task();
         RouteList rl = routeListService.getByMlNumber(Math.toIntExact(task.getMlNumber()));
         PermissionDocument pd = permissionDocumentService.getByPrId(Math.toIntExact(task.getPdId()));
-        Priority prior = Priority.valueOf(task.getPriorityId());
         WorkType wt = workTypeService.getById(task.getWtId());
         Employee employee = employeeService.getById(task.getAssigneeId());
 
+        // Поиск последней записи по ПУ
+        PollRegistry poll = pollRegistryService.getAll().stream()
+                .filter(p -> p.getPuSerialNumber().getPuSerialNumber().equals(task.getPuSerialNumber()))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("PollRegistry not found by serial: " + task.getPuSerialNumber()));
+
+        RouteList routeList = pollRegistryToRouteListService.getAll().stream()
+                .filter(link -> link.getPrId().equals(poll))
+                .map(PollRegistryToRouteList::getRouteListNumber)
+                .findFirst()
+                .orElse(null);
+
+        // Вычисление приоритета по дате опроса
+        Priority priority = Priority.getPriority(
+                (int) ((new Date().getTime() - poll.getPollDate().getTime()) / (1000 * 60 * 60 * 24))
+        );
 
         t.setComment(task.getComment());
         t.setDateOfCreation(new Date());
         t.setAddress(task.getAddress());
-        t.setMlNumber(rl);
+        t.setMlNumber(routeList != null ? routeList : rl);
         t.setPdId(pd);
-        t.setPriorityId(prior); // ✅ Исправлено
+        t.setPriorityId(priority);
         t.setWtId(wt);
         t.setAssignee(employee);
         t.setTaskNumber(null);
+        t.setPuSerialNumber(task.getPuSerialNumber());
+
         t = repository.save(t);
 
-        // Добавление статуса "Запланировано"
-        Status taskStatus;
-        try {
-            taskStatus = statusService.getAll()
-                    .stream()
-                    .filter(x -> Objects.equals(x.getStatusType(), "Запланировано"))
-                    .findFirst()
-                    .orElseThrow();
-        } catch (Exception e) {
-            System.out.println("Status \"Запланировано\" not found. Force adding it to DB.");
-            Status planned = new Status();
-            planned.setStatusType("Запланировано");
-            taskStatus = statusService.create(planned);
-        }
+        // Установка статуса "Запланировано"
+        Status taskStatus = statusService.getAll().stream()
+                .filter(s -> "Запланировано".equals(s.getStatusType()))
+                .findFirst()
+                .orElseGet(() -> {
+                    Status s = new Status();
+                    s.setStatusType("Запланировано");
+                    return statusService.create(s);
+                });
 
-        // Добавление записи в смежную таблицу TaskStatus
         TaskStatus taskStatusEntry = new TaskStatus();
         Date date = new Date();
         taskStatusEntry.setDateOfStatusSet(date);
         taskStatusEntry.setTimeOfStatusSet(new Time(date.getTime()));
         taskStatusEntry.setTaskNumber(t);
         taskStatusEntry.setStatusId(taskStatus);
+
         taskStatusService.create(taskStatusEntry);
 
-
-        XMLTaskSendDTO xmlTask = new XMLTaskSendDTO(t, rl, prior, pd, wt, employee);
-
-        return xmlTask;
+        return new XMLTaskSendDTO(t, rl, priority, pd, wt, employee);
     }
 
     public List<Task> getAll() {
-        return repository.findAll();
-    }
+    return repository.findAll();
+}
+
 
     public Task getById(Long id) {
         return repository.findById(id)

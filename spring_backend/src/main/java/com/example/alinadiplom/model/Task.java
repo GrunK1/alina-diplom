@@ -32,4 +32,16 @@ public class Task {
 
     @ManyToOne
     private Employee assignee;
+    
+    @Transient
+    private String status;
+
+    @Transient
+    private Date startDate;
+
+    @Transient
+    private Date endDate;
+
+    @Column(name = "pu_serial_number")
+    private String puSerialNumber;
 }
