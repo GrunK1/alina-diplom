@@ -187,10 +187,12 @@ const MapPage = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      <NavigationBarSection />
+      <div className="fixed top-0 left-0 w-full z-[1001]">
+        <NavigationBarSection />
+      </div>
 
       <div className="pt-[80px] relative h-full w-full">
-        <div className="absolute z-[999] top-0 left-4 bg-white p-4 rounded shadow-md w-64">
+        <div className="absolute z-[999] top-50 left-4 bg-white p-4 rounded shadow-md w-64">
           <h3 className="font-bold mb-2">Фильтры</h3>
           {[
             ["Критический", "critical"],
@@ -241,7 +243,7 @@ const MapPage = () => {
         </MapContainer>
 
         {selectedDevice && (
-          <div className="absolute top-0 right-0 w-[400px] h-full bg-white shadow-lg p-6 overflow-y-auto z-[1000]">
+          <div className="absolute top-20 right-0 w-[400px] h-full bg-white shadow-lg p-6 overflow-y-auto z-[1000]">
             <h2 className="text-lg font-bold mb-2">
               Создание задания для {selectedDevice.puSerialNumber}
             </h2>

@@ -121,8 +121,8 @@ const TasksPage = () => {
 
   const stats = {
     total: tasks.length,
-    inProgress: tasks.filter((t) => t.status === "В процессе").length,
-    completed: tasks.filter((t) => t.status === "Завершено").length,
+    inProgress: tasks.filter((t) => t.status === "В работе").length,
+    completed: tasks.filter((t) => t.status === "Выполнено").length,
   };
 
   const formatDate = (dateStr) =>

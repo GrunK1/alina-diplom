@@ -63,10 +63,15 @@ const RouteSheetsPage = () => {
     date ? new Date(date).toLocaleDateString("ru-RU") : "-";
 
   const handleSubmit = async (serialNumber, priority) => {
-    const alreadyExists = tasks.some(
-      (t) =>
-        t.mlNumber.toString() === mlNumber && t.puSerialNumber === serialNumber
-    );
+    // const alreadyExists = tasks.some(
+    //   (t) =>
+    //     t.mlNumber.toString() === mlNumber && t.puSerialNumber === serialNumber
+    // );
+    const alreadyExists = tasks.some((t) => t.puSerialNumber === serialNumber);
+    if (alreadyExists) {
+      setMessage("Задание уже создано");
+      return;
+    }
 
     if (alreadyExists) {
       setMessage(`Задание по ПУ ${serialNumber} уже создано`);
